@@ -22,5 +22,6 @@ if (fs.existsSync(webDist)) {
   app.get(/^\/(?!api|webhook|health).*/, (_req, res) => res.sendFile(path.join(webDist, 'index.html')));
 }
 
-await mongoose.connect(config.mongoUri);
+// dbName keeps data in "dm-tool" even if the connection string has no database name.
+await mongoose.connect(config.mongoUri, { dbName: config.mongoDbName });
 app.listen(config.port, () => console.log(`dm-tool listening on :${config.port}`));

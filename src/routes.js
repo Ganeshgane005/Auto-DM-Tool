@@ -2,7 +2,7 @@ import express from 'express';
 import crypto from 'node:crypto';
 import { config } from './config.js';
 import { Account, Automation, Event } from './models.js';
-import { resolveAccount, subscribeToComments, getMedia } from './instagram.js';
+import { resolveAccount, subscribeToComments, getMedia, getSubscribedFields, unsubscribe } from './instagram.js';
 
 export const apiRouter = express.Router();
 
@@ -24,30 +24,36 @@ const wrap = (fn) => (req, res) =>
   });
 
 // --- Accounts (the connected Instagram professional accounts) ---
+// Every account with its automation count and total DMs sent (tokens never leave the server).
 apiRouter.get('/accounts', wrap(async (_req, res) => {
-  const accounts = await Account.find({}, '-accessToken');
-  res.json(accounts);
+  const accounts = await Account.find({}, '-accessToken').sort({ createdAt: 1 }).lean();
+  const totals = await Automation.aggregate([
+    { $group: { _id: '$accountId', automations: { $sum: 1 }, sent: { $sum: '$stats.sent' } } },
+  ]);
+  const byId = Object.fromEntries(totals.map((t) => [String(t._id), t]));
+  res.json(accounts.map((a) => ({
+    ...a,
+    automations: byId[String(a._id)]?.automations || 0,
+    sent: byId[String(a._id)]?.sent || 0,
+  })));
 }));
 
-apiRouter.post('/accounts', wrap(async (req, res) => {
-  const { igUserId, username, accessToken } = req.body;
-  const account = await Account.findOneAndUpdate(
-    { igUserId: String(igUserId) },
-    { igUserId: String(igUserId), username, accessToken },
-    { upsert: true, new: true, runValidators: true }
-  );
-  res.status(201).json({ _id: account._id, igUserId: account.igUserId, username: account.username });
-}));
-
-// Easiest way to add an account: send the token (+ igUserId for Unified Login).
-// We check the token works, save it, and try to switch on comment webhooks.
+// Add (or re-connect) an Instagram account: token + account ID from Meta's "Generate access tokens".
+// We check the token works, save it, and switch on comment + message webhooks for it.
 apiRouter.post('/accounts/connect', wrap(async (req, res) => {
-  const { accessToken, igUserId: givenId } = req.body || {};
+  const accessToken = String(req.body?.accessToken || '').trim();
+  const givenId = String(req.body?.igUserId || '').trim();
   if (!accessToken) return res.status(400).json({ error: 'accessToken is required' });
-  const { igUserId, username } = await resolveAccount(accessToken, givenId);
+  let profile;
+  try {
+    profile = await resolveAccount(accessToken, givenId);
+  } catch (err) {
+    return res.status(400).json({ error: `Meta did not accept this token / account ID. ${err.message}` });
+  }
+  const { igUserId, username, name, profilePictureUrl } = profile;
   const account = await Account.findOneAndUpdate(
     { igUserId },
-    { igUserId, username, accessToken },
+    { igUserId, username, name, profilePictureUrl, accessToken },
     { upsert: true, new: true, runValidators: true }
   );
   // Saving the account must not depend on this call: with Unified Login the
@@ -61,6 +67,38 @@ apiRouter.post('/accounts/connect', wrap(async (req, res) => {
     subscribeError = err.message;
   }
   res.status(201).json({ _id: account._id, igUserId, username, subscribed, subscribeError });
+}));
+
+// Is this account still working? (token valid + which webhook fields are on)
+apiRouter.get('/accounts/:id/health', wrap(async (req, res) => {
+  const account = await Account.findById(req.params.id);
+  if (!account) return res.sendStatus(404);
+  try {
+    const profile = await resolveAccount(account.accessToken, account.igUserId);
+    const fields = await getSubscribedFields(account.igUserId, account.accessToken);
+    const ok = fields.includes('comments') && fields.includes('messages');
+    if (profile.username !== account.username || profile.profilePictureUrl !== account.profilePictureUrl) {
+      await Account.updateOne({ _id: account._id }, { username: profile.username, name: profile.name, profilePictureUrl: profile.profilePictureUrl });
+    }
+    res.json({ ok, tokenOk: true, subscribedFields: fields });
+  } catch (err) {
+    res.json({ ok: false, tokenOk: false, error: err.message });
+  }
+}));
+
+// Remove an account and everything that belongs to it.
+apiRouter.delete('/accounts/:id', wrap(async (req, res) => {
+  const account = await Account.findById(req.params.id);
+  if (!account) return res.sendStatus(404);
+  try {
+    await unsubscribe(account.igUserId, account.accessToken); // stop Meta sending its webhooks
+  } catch (err) {
+    console.warn('unsubscribe failed (continuing):', err.message);
+  }
+  await Automation.deleteMany({ accountId: account._id });
+  await Event.deleteMany({ accountId: account._id });
+  await account.deleteOne();
+  res.sendStatus(204);
 }));
 
 // --- Automations ---

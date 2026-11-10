@@ -4,6 +4,8 @@ const accountSchema = new mongoose.Schema(
   {
     igUserId: { type: String, required: true, unique: true },
     username: String,
+    name: String,
+    profilePictureUrl: String,
     // TODO before onboarding other creators: encrypt this at rest.
     accessToken: { type: String, required: true },
   },

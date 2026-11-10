@@ -176,6 +176,20 @@ legend { font-weight: 700; padding: 0 .35rem; }
 .qr { justify-self: start; border: 1px solid var(--accent); color: var(--accent); border-radius: 99px; font-size: .78rem; padding: .15rem .65rem; font-weight: 600; }
 .chat-note { margin: .2rem 0 0; font-size: .72rem; color: var(--muted); text-align: center; }
 
+/* Accounts */
+.switcher { display: flex; align-items: center; gap: .4rem; }
+.switcher select { width: auto; max-width: 180px; padding: .35rem .5rem; }
+.avatar-img { border-radius: 50%; object-fit: cover; flex: none; display: inline-grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.tabs button:disabled { opacity: .4; }
+.account-list { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; gap: .75rem; }
+.account-card { display: grid; grid-template-columns: 52px 1fr auto; gap: 1rem; padding: 1rem; align-items: center; }
+.account-card.current { border-color: var(--accent); }
+.account-main { display: grid; gap: .2rem; min-width: 0; }
+.add-card { padding: 1.1rem 1.2rem; display: grid; gap: .9rem; margin-bottom: 1rem; }
+.add-card h2 { margin: 0; }
+.steps { margin: 0; padding-left: 1.2rem; display: grid; gap: .3rem; color: var(--muted); }
+.steps b { color: var(--text); }
+
 /* Activity */
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: .9rem; }
@@ -197,7 +211,9 @@ tr:last-child td { border-bottom: none; }
 @media (max-width: 600px) {
   .topbar { flex-wrap: wrap; padding: .6rem 1rem; }
   .account { margin-left: 0; width: 100%; justify-content: space-between; }
-  .auto { grid-template-columns: 48px 1fr; }
+  .auto, .account-card { grid-template-columns: 48px 1fr; }
+  .account-card .actions { grid-column: 1 / -1; }
+  .tabs { width: 100%; overflow-x: auto; }
   .thumb { width: 48px; height: 48px; }
   .auto-side { grid-column: 1 / -1; justify-items: start; }
   .head-actions { width: 100%; }

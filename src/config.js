@@ -7,6 +7,7 @@ const required = (name) => {
 export const config = {
   port: Number(process.env.PORT || 3000),
   mongoUri: required('MONGODB_URI'),
+  mongoDbName: process.env.MONGODB_DB || 'dm-tool',
   appSecret: required('META_APP_SECRET'),
   verifyToken: required('WEBHOOK_VERIFY_TOKEN'),
   adminApiKey: required('ADMIN_API_KEY'),

@@ -56,14 +56,30 @@ export function getFollowStatus(igsid, token) {
  */
 export async function resolveAccount(token, igUserId) {
   if (igUserId) {
-    const data = await get(`${igUserId}?fields=id,username`, token);
-    return { igUserId: String(data.id || igUserId), username: data.username };
+    const data = await get(`${igUserId}?fields=id,username,name,profile_picture_url`, token);
+    return {
+      igUserId: String(data.id || igUserId),
+      username: data.username,
+      name: data.name,
+      profilePictureUrl: data.profile_picture_url,
+    };
   }
-  const me = await get('me?fields=user_id,username', token);
+  const me = await get('me?fields=user_id,username,name,profile_picture_url', token);
   if (!me.user_id) {
     throw new Error('Could not find the Instagram account ID from this token. Send igUserId too (shown in the App Dashboard).');
   }
-  return { igUserId: String(me.user_id), username: me.username };
+  return { igUserId: String(me.user_id), username: me.username, name: me.name, profilePictureUrl: me.profile_picture_url };
+}
+
+/** Which webhook fields are switched on for this account, e.g. ['comments', 'messages']. */
+export async function getSubscribedFields(igUserId, token) {
+  const data = await get(`${igUserId}/subscribed_apps`, token);
+  return (data.data || []).flatMap((a) => a.subscribed_fields || []);
+}
+
+/** Stop webhooks for this account (used when it is removed from the tool). */
+export function unsubscribe(igUserId, token) {
+  return call('DELETE', `${igUserId}/subscribed_apps`, token);
 }
 
 /** Turn on webhook notifications for this account. Without this, no comments arrive. */

@@ -2,11 +2,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, getKey, setKey, AuthError } from './api.js'
 import Automations from './Automations.jsx'
 import Activity from './Activity.jsx'
+import Accounts, { Avatar } from './Accounts.jsx'
+
+const SELECTED = 'dmtool.accountId'
+const remember = (id) => { try { localStorage.setItem(SELECTED, id) } catch { /* private mode */ } }
+const remembered = () => { try { return localStorage.getItem(SELECTED) || '' } catch { return '' } }
 
 export default function App() {
   const [authed, setAuthed] = useState(Boolean(getKey()))
-  const [accounts, setAccounts] = useState([])
-  const [accountId, setAccountId] = useState('')
+  const [accounts, setAccounts] = useState(null)
+  const [accountId, setAccountId] = useState(remembered)
   const [tab, setTab] = useState('automations')
   const [error, setError] = useState('')
 
@@ -18,20 +23,35 @@ export default function App() {
     setError(err.message)
   }, [])
 
-  useEffect(() => {
-    if (!authed) return
-    api('/accounts')
+  const selectAccount = useCallback((id) => {
+    setAccountId(id)
+    remember(id)
+  }, [])
+
+  // Load accounts; optionally jump to one (e.g. right after adding it).
+  const loadAccounts = useCallback((focusId) => {
+    return api('/accounts')
       .then((list) => {
         setAccounts(list)
-        setAccountId((id) => id || list[0]?._id || '')
         setError('')
+        setAccountId((current) => {
+          const next = [focusId, current].find((id) => id && list.some((a) => a._id === id)) || list[0]?._id || ''
+          remember(next)
+          return next
+        })
+        if (focusId) setTab('automations')
+        if (list.length === 0) setTab('accounts')
       })
       .catch(handleError)
-  }, [authed, handleError])
+  }, [handleError])
+
+  useEffect(() => {
+    if (authed) loadAccounts()
+  }, [authed, loadAccounts])
 
   if (!authed) return <KeyLogin error={error} onDone={() => { setError(''); setAuthed(true) }} />
 
-  const account = accounts.find((a) => a._id === accountId)
+  const account = accounts?.find((a) => a._id === accountId)
 
   return (
     <div className="shell">
@@ -41,15 +61,20 @@ export default function App() {
           <span>DM Tool</span>
         </div>
         <nav className="tabs" role="tablist">
-          <button role="tab" aria-selected={tab === 'automations'} onClick={() => setTab('automations')}>Automations</button>
-          <button role="tab" aria-selected={tab === 'activity'} onClick={() => setTab('activity')}>Activity</button>
+          <button role="tab" aria-selected={tab === 'automations'} disabled={!account} onClick={() => setTab('automations')}>Automations</button>
+          <button role="tab" aria-selected={tab === 'activity'} disabled={!account} onClick={() => setTab('activity')}>Activity</button>
+          <button role="tab" aria-selected={tab === 'accounts'} onClick={() => setTab('accounts')}>Accounts{accounts?.length ? ` (${accounts.length})` : ''}</button>
         </nav>
         <div className="account">
-          {accounts.length > 1 ? (
-            <select value={accountId} onChange={(e) => setAccountId(e.target.value)}>
-              {accounts.map((a) => <option key={a._id} value={a._id}>@{a.username}</option>)}
-            </select>
-          ) : account ? <span className="handle">@{account.username}</span> : null}
+          {account && (
+            <label className="switcher">
+              <Avatar account={account} size={26} />
+              <span className="sr-only">Instagram account</span>
+              <select value={accountId} onChange={(e) => selectAccount(e.target.value)}>
+                {accounts.map((a) => <option key={a._id} value={a._id}>@{a.username}</option>)}
+              </select>
+            </label>
+          )}
           <button className="ghost small" onClick={() => { setKey(''); setAuthed(false) }}>Log out</button>
         </div>
       </header>
@@ -57,15 +82,20 @@ export default function App() {
       {error && <div className="banner error" role="alert">{error} <button className="ghost small" onClick={() => setError('')}>Dismiss</button></div>}
 
       <main className="content">
-        {!account ? (
-          <div className="empty">
-            <h2>No Instagram account connected</h2>
-            <p>Connect one with <code>POST /api/accounts/connect</code> (see PHASE0-SETUP.md). "Connect Instagram" button comes next.</p>
-          </div>
+        {accounts === null ? (
+          <p className="muted">Loading…</p>
+        ) : tab === 'accounts' || !account ? (
+          <Accounts
+            accounts={accounts}
+            currentId={accountId}
+            onSelect={(id) => { selectAccount(id); setTab('automations') }}
+            onChanged={loadAccounts}
+            onError={handleError}
+          />
         ) : tab === 'automations' ? (
-          <Automations account={account} onError={handleError} />
+          <Automations key={account._id} account={account} onError={handleError} />
         ) : (
-          <Activity account={account} onError={handleError} />
+          <Activity key={account._id} account={account} onError={handleError} />
         )}
       </main>
     </div>
