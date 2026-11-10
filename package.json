@@ -1,0 +1,24 @@
+{
+  "name": "dm-tool",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Instagram comment-to-DM automation using the official Meta API",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --env-file=.env --watch src/index.js",
+    "test": "node --test test/core.test.js",
+    "simulate": "node --env-file=.env scripts/simulate-comment.js",
+    "db": "mongod --dbpath ./data --port 27017",
+    "build:web": "npm --prefix web run build",
+    "local": "node --env-file=.env src/index.js",
+    "build": "npm ci && npm --prefix web ci && npm run build:web"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "mongoose": "^8.8.0"
+  }
+}
