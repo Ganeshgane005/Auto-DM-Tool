@@ -1,5 +1,6 @@
+// Trim: values pasted into a hosting dashboard often carry a stray space or line break.
 const required = (name) => {
-  const value = process.env[name];
+  const value = (process.env[name] || '').trim();
   if (!value) throw new Error(`Missing required env var ${name} (see .env.example)`);
   return value;
 };
