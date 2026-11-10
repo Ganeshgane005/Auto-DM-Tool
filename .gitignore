@@ -4,3 +4,7 @@ data
 *.log
 web/node_modules
 web/dist
+
+# local files that may hold tokens
+old-tokens.txt
+*tokens*.txt
